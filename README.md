@@ -11,8 +11,9 @@ Två typer av dubbletter rapporteras:
    det kan vara omdöpta filer, nya versioner av samma dokument, eller
    faktiska dubbletter som blivit redigerade. Kräver manuell koll.
 
-Scriptet tar **inte** bort eller flyttar några filer — det bara listar vad
-det hittar, så du kan besluta vad som ska göras.
+Scriptet listar bara vad det hittar som standard — inget tas bort. Det
+finns en valfri `--trash`-flagga (se nedan) för att flytta bekräftade
+exakta dubbletter till papperskorgen.
 
 ## Installation
 
@@ -31,6 +32,14 @@ pip install -r requirements.txt
    "OAuth client ID".
    - Applikationstyp: **Desktop app**.
 4. Ladda ner JSON-filen och spara den som `credentials.json` i projektmappen.
+
+Scriptet begär full åtkomst till din Drive (`drive`-scopet), inte bara
+läsbehörighet, eftersom den valfria `--trash`-funktionen behöver kunna
+ändra filer. Om du bara vill lista dubbletter används skrivbehörigheten
+aldrig.
+
+Om du körde en äldre version av scriptet med enbart läsbehörighet: ta
+bort `token.json` och kör om, så loggas du in på nytt med rätt behörighet.
 
 Filerna `credentials.json` och `token.json` innehåller känsliga
 uppgifter och ska **inte** checkas in i git (de ligger redan i
@@ -57,6 +66,25 @@ Spara en rapport till fil (CSV eller JSON):
 ```bash
 python3 find_duplicates.py <FOLDER_ID> --recursive --output dubbletter.csv
 ```
+
+### Ta bort dubbletter (papperskorg)
+
+Flytta exakta dubbletter till Google Drives papperskorg, en fil per grupp
+behålls (namngrupper med olika innehåll rörs aldrig automatiskt):
+
+```bash
+# Dry-run: visar bara vad som SKULLE tas bort, inget ändras
+python3 find_duplicates.py <FOLDER_ID> --recursive --trash
+
+# Kör på riktigt
+python3 find_duplicates.py <FOLDER_ID> --recursive --trash --yes
+```
+
+Standard är att behålla den äldsta filen i varje grupp (`--keep oldest`).
+Använd `--keep newest` för att behålla den senast ändrade filen istället.
+
+Filerna raderas inte permanent — de hamnar i Drives papperskorg och kan
+återställas därifrån om något blev fel.
 
 Första gången du kör scriptet öppnas en webbläsare där du loggar in med
 ditt Google-konto och godkänner åtkomst (endast läsbehörighet). Efter det

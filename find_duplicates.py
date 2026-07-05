@@ -8,6 +8,10 @@ identiska (garanterade dubbletter). Filer med samma filnamn men olika
 checksumma listas separat som en varning, eftersom det ofta rör sig om
 omdöpta eller uppdaterade versioner av samma dokument.
 
+Med --trash --yes kan exakta dubbletter flyttas till Google Drives
+papperskorg (en fil per grupp behålls). Utan --yes är --trash en
+dry-run som bara visar vad som skulle tas bort.
+
 Se README.md för instruktioner om hur man skapar autentiseringsuppgifter.
 """
 
@@ -27,7 +31,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 PDF_MIME = "application/pdf"
 
@@ -196,6 +200,43 @@ def write_output(path: Path, exact_dupes: dict[str, list[dict]], name_dupes: dic
     print(f"Rapport skriven till {path}")
 
 
+def pick_survivor(files: list[dict], keep: str) -> dict:
+    def sort_key(f: dict) -> str:
+        return f.get("modifiedTime") or ""
+
+    ordered = sorted(files, key=sort_key)
+    return ordered[0] if keep == "oldest" else ordered[-1]
+
+
+def trash_duplicates(service: Any, exact_dupes: dict[str, list[dict]], keep: str, execute: bool) -> None:
+    if not exact_dupes:
+        print("Inga exakta dubbletter att papperskorga.")
+        return
+
+    to_trash: list[dict] = []
+    for files in exact_dupes.values():
+        survivor = pick_survivor(files, keep)
+        to_trash.extend(f for f in files if f["id"] != survivor["id"])
+
+    if not to_trash:
+        return
+
+    action = "Papperskorgar" if execute else "SKULLE papperskorga (dry-run, lägg till --yes för att köra)"
+    print(f"\n=== {action} {len(to_trash)} fil(er), behåller {keep} fil per grupp ===\n")
+    for f in to_trash:
+        print(f"  - {f['name']} ({format_size(f.get('size'))}) — {f.get('webViewLink', f['id'])}")
+        if execute:
+            try:
+                service.files().update(fileId=f["id"], body={"trashed": True}, supportsAllDrives=True).execute()
+            except HttpError as err:
+                print(f"    FEL: kunde inte papperskorga {f['name']}: {err}")
+
+    if not execute:
+        print("\nInget har tagits bort. Kör igen med --trash --yes för att flytta filerna ovan till papperskorgen.")
+    else:
+        print("\nKlart. Filerna ligger i Google Drives papperskorg och kan återställas därifrån vid behov.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("folder_id", help="ID för Google Drive-mappen som ska genomsökas")
@@ -219,6 +260,26 @@ def main() -> None:
         type=Path,
         help="Skriv rapport till fil (.csv eller .json) utöver terminalutskrift",
     )
+    parser.add_argument(
+        "--trash",
+        action="store_true",
+        help=(
+            "Flytta exakta dubbletter till papperskorgen, en fil per grupp behålls. "
+            "Utan --yes visas bara vad som SKULLE tas bort (dry-run). "
+            "Namngrupper (samma namn, olika innehåll) papperskorgas aldrig automatiskt."
+        ),
+    )
+    parser.add_argument(
+        "--keep",
+        choices=["oldest", "newest"],
+        default="oldest",
+        help="Vilken fil i varje dubblettgrupp som ska behållas (default: oldest)",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Bekräfta att --trash faktiskt ska utföras, inte bara dry-run",
+    )
     args = parser.parse_args()
 
     creds = get_credentials(args.credentials, args.token)
@@ -241,6 +302,9 @@ def main() -> None:
 
     if args.output:
         write_output(args.output, exact_dupes, name_dupes)
+
+    if args.trash:
+        trash_duplicates(service, exact_dupes, args.keep, execute=args.yes)
 
 
 if __name__ == "__main__":
