@@ -3,6 +3,10 @@
 Script som söker igenom en mapp på Google Drive efter PDF-filer och listar
 vilka som är dubbletter.
 
+Se även [`kategorisera_pdfer/`](kategorisera_pdfer/) — ett separat Google
+Apps Script som OCR-tolkar PDF:er och föreslår om de är "Grammatik" eller
+"Övrigt".
+
 Två typer av dubbletter rapporteras:
 
 1. **Exakta dubbletter** — filer med identiskt innehåll (samma MD5-checksumma
