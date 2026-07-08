@@ -50,16 +50,26 @@ slutet), så inget resultat går förlorat om körningen avbryts.
 Apps Script avbryter automatiskt körningen efter 6 minuter (privata
 Google-konton) eller 30 minuter (Google Workspace/skolkonto). Funktionen
 `kategoriseraPdfer` stoppar sig själv efter `CONFIG.MAX_RUNTIME_MINUTES`
-(standard 5 minuter, för att fungera på båda kontotyperna) och kommer
-ihåg vilka filer som redan är klara via Fil-ID-kolumnen.
+och kommer ihåg vilka filer som redan är klara via Fil-ID-kolumnen.
 
 Har du väldigt många filer: kör bara funktionen igen (Kör-knappen) så
 fortsätter den automatiskt med resterande filer, utan att skriva över det
 som redan gjorts. Upprepa tills loggen (Visa → Loggar) säger "Klart! X
 filer bearbetade denna körning, Y totalt" och X + tidigare klara = Y.
 
-Om du kör på ett skolkonto kan du höja `MAX_RUNTIME_MINUTES` (t.ex. till
-25) för att bli klar på färre körningar.
+`MAX_RUNTIME_MINUTES` är satt till 25 som standard, vilket passar
+skolkonton (30 minuters gräns). Kör du på ett privat Google-konto (6
+minuters gräns) — sänk den till t.ex. 5.
+
+### Slippa köra om manuellt
+
+Kör funktionen `skapaTrigger` **en gång**. Den ställer in
+`kategoriseraPdfer` att köras automatiskt var 10:e minut tills alla filer
+är klara — då tar den bort sig själv automatiskt. Du kan stänga fliken
+och komma tillbaka senare för att se resultatet i kalkylarket.
+
+Vill du avbryta i förtid: gå till klock-ikonen ("Utlösare") i
+vänstermenyn i Apps Script-editorn och radera triggern manuellt.
 
 Vill du köra om en enskild fil som fick kategorin **FEL** (t.ex. om OCR
 misslyckades): radera den raden i kalkylarket och kör funktionen igen —

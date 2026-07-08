@@ -20,6 +20,10 @@
  * så fortsätter den med resterande filer, tills loggen säger att allt är
  * klart.
  *
+ * Vill du slippa köra om manuellt: kör funktionen `skapaTrigger` en gång.
+ * Den ställer in `kategoriseraPdfer` att köras automatiskt var 10:e minut,
+ * och tar bort sig själv automatiskt när alla filer är klara.
+ *
  * Krav: Aktivera avancerad tjänst "Drive API" (v2) under Tjänster i
  * Apps Script-editorn innan du kör. Se README.md för fullständiga
  * installationssteg.
@@ -29,7 +33,7 @@ const CONFIG = {
   FOLDER_ID: 'KLISTRA_IN_MAPP_ID_HÄR',
   RECURSIVE: true,
   MIN_SCORE: 2,
-  MAX_RUNTIME_MINUTES: 5,
+  MAX_RUNTIME_MINUTES: 25,
   OUTPUT_SPREADSHEET_NAME: 'PDF-kategorisering',
   OUTPUT_SHEET_NAME: 'Resultat',
 };
@@ -77,6 +81,24 @@ function kategoriseraPdfer() {
   }
 
   Logger.log(`Klart! ${processed} filer bearbetade denna körning, ${files.length} totalt. Se kalkylarket för resultat.`);
+  deleteTriggersForFunction_('kategoriseraPdfer');
+}
+
+function skapaTrigger() {
+  deleteTriggersForFunction_('kategoriseraPdfer');
+  ScriptApp.newTrigger('kategoriseraPdfer')
+    .timeBased()
+    .everyMinutes(10)
+    .create();
+  Logger.log('Trigger skapad. kategoriseraPdfer körs nu automatiskt var 10:e minut tills alla filer är klara, då tas triggern bort automatiskt.');
+}
+
+function deleteTriggersForFunction_(functionName) {
+  ScriptApp.getProjectTriggers().forEach((trigger) => {
+    if (trigger.getHandlerFunction() === functionName) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
 }
 
 function collectPdfs_(rootFolder, recursive) {
