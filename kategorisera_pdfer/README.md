@@ -1,24 +1,36 @@
-# Kategorisera PDF:er (grammatik / övrigt)
+# Kategorisera PDF:er (grammatik / religion / övrigt)
 
 Google Apps Script som OCR-tolkar inskannade PDF-filer i en Drive-mapp och
-föreslår om varje fil hör till kategorin **Grammatik** eller **Övrigt**,
-baserat på en nyckelordslista. Resultatet skrivs till ett kalkylark —
-inga filer flyttas eller ändras.
+föreslår om varje fil hör till kategorin **Grammatik**, **Religion** eller
+**Övrigt**, baserat på nyckelordslistor. Resultatet skrivs till ett
+kalkylark — inga filer flyttas eller ändras.
 
 ## Hur klassificeringen fungerar
 
 1. Varje PDF konverteras tillfälligt till en Google Docs-kopia med Drive
    API:s OCR (`ocr: true`, `ocrLanguage: 'sv'`). Kopian raderas igen direkt
    efter att texten lästs ut.
-2. Texten söks igenom efter ord ur listan `KEYWORDS` i `Kategorisera.gs`
-   (t.ex. "substantiv", "verb", "bisats", "böjning"...).
-3. Varje träff ger 1 poäng. Om filnamnet innehåller "grammatik" ges 3 extra
-   poäng.
-4. Poäng ≥ `MIN_SCORE` (standard 2) → **Grammatik**, annars **Övrigt**.
+2. Texten söks igenom (ordgränsmatchning, inte delsträng) efter ord ur
+   `GRAMMATIK_KEYWORDS` (t.ex. "substantiv", "verb", "bisats") respektive
+   `RELIGION_KEYWORDS` i `Kategorisera.gs` (religionsnamn som "kristendom",
+   "islam", "hinduism", "buddhism", "judendom", samt "religion", "tro",
+   "gud"/"gudar" och gudanamn som "allah", "jesus", "buddha", "shiva" m.fl.).
+3. Varje träff ger 1 poäng. Om filnamnet innehåller "grammatik" resp.
+   "religion" ges 3 extra poäng till respektive kategori. Om texten
+   bedöms vara till stor del på engelska (andel engelska funktionsord ≥
+   `CONFIG.ENGLISH_MIN_RATIO`) ges `CONFIG.ENGLISH_SCORE_BONUS` extra
+   poäng till Religion.
+4. Religionspoäng ≥ `MIN_SCORE_RELIGION` (standard 2) och ≥
+   grammatikpoäng → **Religion**. Annars grammatikpoäng ≥ `MIN_SCORE`
+   (standard 2) → **Grammatik**. Annars **Övrigt** — dit hamnar t.ex.
+   historia, så länge texten inte råkar träffa religionsordlistan (en
+   historietext som nämner mytologiska gudar många gånger kan ändå ge
+   utslag på Religion).
 
-Justera `KEYWORDS` och `MIN_SCORE` i toppen av scriptet efter behov — det
-här är en enkel startpunkt, inte en färdig lösning. Om nyckelordsmetoden
-missar för många filer kan ett senare steg använda en språkmodell istället.
+Justera `GRAMMATIK_KEYWORDS`, `RELIGION_KEYWORDS`, `ENGLISH_STOPWORDS` och
+tröskelvärdena i `CONFIG` efter behov — det här är en enkel startpunkt,
+inte en färdig lösning. Om nyckelordsmetoden missar för många filer kan
+ett senare steg använda en språkmodell istället.
 
 ## Installation
 

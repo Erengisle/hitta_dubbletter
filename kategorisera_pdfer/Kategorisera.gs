@@ -1,15 +1,23 @@
 /**
- * Kategorisera inskannade PDF-filer som "Grammatik" eller "Övrigt" utifrån
- * OCR-tolkad text och en nyckelordslista.
+ * Kategorisera inskannade PDF-filer som "Grammatik", "Religion" eller
+ * "Övrigt" utifrån OCR-tolkad text och nyckelordslistor.
  *
  * Så här funkar det:
  * 1. Filerna i CONFIG.FOLDER_ID (valfritt rekursivt genom undermappar)
  *    OCR-tolkas via Drive API:s inbyggda OCR-konvertering (skapar en
  *    tillfällig Google Docs-kopia med textlager, som raderas igen direkt
  *    efter att texten lästs ut).
- * 2. Texten söks igenom efter ord ur KEYWORDS. Filnamnet ger extra poäng
- *    om det innehåller "grammatik".
- * 3. Poäng >= CONFIG.MIN_SCORE ger kategorin "Grammatik", annars "Övrigt".
+ * 2. Texten söks igenom efter ord ur GRAMMATIK_KEYWORDS respektive
+ *    RELIGION_KEYWORDS (ordgränsmatchning, inte delsträng, så t.ex. "tro"
+ *    inte råkar träffa inuti "kontroll"). Filnamnet ger extra poäng om det
+ *    innehåller "grammatik"/"religion". Text som till stor del är på
+ *    engelska ger extra poäng till Religion (se ENGLISH_STOPWORDS och
+ *    CONFIG.ENGLISH_MIN_RATIO).
+ * 3. Religionspoäng >= CONFIG.MIN_SCORE_RELIGION och >= grammatikpoäng ger
+ *    kategorin "Religion". Annars ger grammatikpoäng >= CONFIG.MIN_SCORE
+ *    kategorin "Grammatik". Annars "Övrigt" — dit hamnar t.ex. historia,
+ *    så länge den inte råkar träffa religionsordlistan (mytologiska gudar
+ *    i en historietext kan fortfarande ge falska Religion-träffar).
  * 4. Varje resultat skrivs till kalkylarket direkt när filen är klar —
  *    inga filer flyttas eller ändras.
  *
@@ -33,6 +41,10 @@ const CONFIG = {
   FOLDER_ID: 'KLISTRA_IN_MAPP_ID_HÄR',
   RECURSIVE: true,
   MIN_SCORE: 2,
+  MIN_SCORE_RELIGION: 2,
+  ENGLISH_MIN_RATIO: 0.12,
+  ENGLISH_MIN_WORDS: 20,
+  ENGLISH_SCORE_BONUS: 2,
   MAX_RUNTIME_MINUTES: 25,
   OUTPUT_SPREADSHEET_NAME: 'PDF-kategorisering',
   OUTPUT_SHEET_NAME: 'Resultat',
@@ -40,7 +52,7 @@ const CONFIG = {
   FLYTTA_BEKRÄFTA: false,
 };
 
-const KEYWORDS = [
+const GRAMMATIK_KEYWORDS = [
   'grammatik', 'substantiv', 'verb', 'adjektiv', 'pronomen', 'preposition',
   'konjunktion', 'adverb', 'räkneord', 'interjektion', 'subjekt', 'predikat',
   'objekt', 'bestämd form', 'obestämd form', 'singular', 'plural', 'presens',
@@ -48,6 +60,23 @@ const KEYWORDS = [
   'infinitiv', 'imperativ', 'particip', 'komparation', 'komparativ',
   'superlativ', 'huvudsats', 'bisats', 'ordföljd', 'satsdel', 'ordklass',
   'genus', 'kasus', 'artikel',
+];
+
+// Ord för religionskategorin: religionsnamn/-begrepp samt namn på gudar
+// och centrala religiösa gestalter.
+const RELIGION_KEYWORDS = [
+  'religion', 'kristendom', 'islam', 'judendom', 'hinduism', 'buddhism',
+  'tro', 'troende', 'gud', 'gudar', 'gudinna', 'gudinnor',
+  'allah', 'muhammed', 'jesus', 'kristus', 'jahve', 'jehova',
+  'buddha', 'shiva', 'vishnu', 'brahma', 'ganesha',
+];
+
+// Vanliga engelska funktionsord, används för att gissa om en text
+// huvudsakligen är skriven på engelska (se detectEnglish_).
+const ENGLISH_STOPWORDS = [
+  'the', 'and', 'of', 'is', 'was', 'were', 'to', 'in', 'that', 'with',
+  'this', 'are', 'for', 'as', 'on', 'it', 'from', 'you', 'your', 'have',
+  'has', 'be', 'by', 'an', 'at', 'not', 'but', 'his', 'her', 'they',
 ];
 
 function kategoriseraPdfer() {
@@ -186,12 +215,36 @@ function ocrToText_(file) {
 function classify_(file, text) {
   const lowerText = text.toLowerCase();
   const lowerName = file.getName().toLowerCase();
-  const matched = KEYWORDS.filter((kw) => lowerText.includes(kw));
-  let score = matched.length;
+
+  const grammatikMatched = GRAMMATIK_KEYWORDS.filter((kw) => containsWord_(lowerText, kw));
+  let grammatikScore = grammatikMatched.length;
   if (lowerName.includes('grammatik')) {
-    score += 3;
+    grammatikScore += 3;
   }
-  const category = score >= CONFIG.MIN_SCORE ? 'Grammatik' : 'Övrigt';
+
+  const religionMatched = RELIGION_KEYWORDS.filter((kw) => containsWord_(lowerText, kw));
+  let religionScore = religionMatched.length;
+  if (lowerName.includes('religion')) {
+    religionScore += 3;
+  }
+  const isEnglish = detectEnglish_(lowerText);
+  if (isEnglish) {
+    religionScore += CONFIG.ENGLISH_SCORE_BONUS;
+  }
+
+  let category = 'Övrigt';
+  let score = 0;
+  let matched = [];
+  if (religionScore >= CONFIG.MIN_SCORE_RELIGION && religionScore >= grammatikScore) {
+    category = 'Religion';
+    score = religionScore;
+    matched = isEnglish ? religionMatched.concat(['[engelsk text]']) : religionMatched;
+  } else if (grammatikScore >= CONFIG.MIN_SCORE) {
+    category = 'Grammatik';
+    score = grammatikScore;
+    matched = grammatikMatched;
+  }
+
   return {
     name: file.getName(),
     url: file.getUrl(),
@@ -199,6 +252,26 @@ function classify_(file, text) {
     score,
     matched,
   };
+}
+
+// Matchar kw som ett helt ord i text (inte som delsträng i ett större ord),
+// t.ex. "tro" ska inte träffa "kontroll". Hanterar å/ä/ö som bokstäver.
+function containsWord_(text, kw) {
+  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(^|[^a-zåäö])${escaped}([^a-zåäö]|$)`, 'i');
+  return pattern.test(text);
+}
+
+// Gissar om text huvudsakligen är på engelska genom att räkna andelen ord
+// som är vanliga engelska funktionsord. Kräver ett minsta antal ord för
+// att inte ge utslag på korta/tomma OCR-resultat.
+function detectEnglish_(text) {
+  const words = text.split(/[^a-zåäö]+/i).filter(Boolean);
+  if (words.length < CONFIG.ENGLISH_MIN_WORDS) {
+    return false;
+  }
+  const englishHits = words.filter((w) => ENGLISH_STOPWORDS.includes(w)).length;
+  return englishHits / words.length >= CONFIG.ENGLISH_MIN_RATIO;
 }
 
 function getOrCreateResultSheet_() {
