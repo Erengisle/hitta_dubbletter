@@ -13,15 +13,23 @@ kalkylark — inga filer flyttas eller ändras.
 2. Texten söks igenom (ordgränsmatchning, inte delsträng) efter ord ur
    `GRAMMATIK_KEYWORDS` (t.ex. "substantiv", "verb", "bisats") respektive
    `RELIGION_KEYWORDS` i `Kategorisera.gs` (religionsnamn som "kristendom",
-   "islam", "hinduism", "buddhism", "judendom", samt "religion", "tro",
-   "gud"/"gudar" och gudanamn som "allah", "jesus", "buddha", "shiva" m.fl.).
+   "islam", "hinduism", "buddhism", "judendom", begrepp som "religion",
+   "tro", "gud"/"gudar", institutioner/högtider som "kyrka", "moské",
+   "bön", "jul", "påsk", "ramadan", och gudanamn/gestalter som "allah",
+   "jesus", "buddha", "shiva", "moses" m.fl.).
 3. Varje träff ger 1 poäng. Om filnamnet innehåller "grammatik" resp.
-   "religion" ges 3 extra poäng till respektive kategori. Om texten
-   bedöms vara till stor del på engelska (andel engelska funktionsord ≥
-   `CONFIG.ENGLISH_MIN_RATIO`) ges `CONFIG.ENGLISH_SCORE_BONUS` extra
-   poäng till Religion — och filen kan **aldrig** bli Grammatik, även om
-   enstaka ord råkar sammanfalla med grammatiklistan (t.ex. "verb",
-   "preposition", "adverb", "genus" stavas likadant på engelska).
+   "religion" ges 3 extra poäng till respektive kategori.
+   - Är texten till stor del på engelska (andel engelska funktionsord ≥
+     `CONFIG.ENGLISH_MIN_RATIO`) ges `CONFIG.ENGLISH_SCORE_BONUS` extra
+     poäng till Religion — och filen kan **aldrig** bli Grammatik, även om
+     enstaka ord råkar sammanfalla med grammatiklistan (t.ex. "verb",
+     "preposition", "adverb", "genus" stavas likadant på engelska).
+   - Ser texten ut som en grammatikövning — kort (≤ `CONFIG.EXERCISE_MAX_WORDS`
+     ord, grammatikövningar är ofta enstaka meningar), har ifyllnadsluckor
+     ("___") eller är en numrerad uppgiftslista — ges `CONFIG.EXERCISE_SCORE_BONUS`
+     extra poäng till Grammatik (se `looksLikeExercise_`). Detta fångar
+     övningar som inte råkar innehålla grammatiktermer, men är en svag
+     signal: vilken kort text som helst (t.ex. ett kort citat) kan träffas.
 4. Religionspoäng ≥ `MIN_SCORE_RELIGION` (standard 2) och ≥
    grammatikpoäng → **Religion**. Annars grammatikpoäng ≥ `MIN_SCORE`
    (standard 2) → **Grammatik**. Annars **Övrigt** — dit hamnar t.ex.

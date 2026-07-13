@@ -13,7 +13,10 @@
  *    innehåller "grammatik"/"religion". Text som till stor del är på
  *    engelska (se ENGLISH_STOPWORDS och CONFIG.ENGLISH_MIN_RATIO) ger
  *    extra poäng till Religion — och kan ALDRIG bli Grammatik, oavsett
- *    ordträffar (grammatikundervisningen är på svenska).
+ *    ordträffar (grammatikundervisningen är på svenska). Kort text,
+ *    ifyllnadsluckor ("___") eller numrerade uppgifter ger extra poäng
+ *    till Grammatik (se looksLikeExercise_) eftersom grammatikövningar
+ *    ofta saknar grammatiktermer men är korta/strukturerade.
  * 3. Religionspoäng >= CONFIG.MIN_SCORE_RELIGION och >= grammatikpoäng ger
  *    kategorin "Religion". Annars ger grammatikpoäng >= CONFIG.MIN_SCORE
  *    kategorin "Grammatik". Annars "Övrigt" — dit hamnar t.ex. historia,
@@ -46,6 +49,10 @@ const CONFIG = {
   ENGLISH_MIN_RATIO: 0.12,
   ENGLISH_MIN_WORDS: 20,
   ENGLISH_SCORE_BONUS: 2,
+  EXERCISE_MAX_WORDS: 25,
+  EXERCISE_MIN_BLANKS: 2,
+  EXERCISE_MIN_NUMBERED_ITEMS: 3,
+  EXERCISE_SCORE_BONUS: 2,
   MAX_RUNTIME_MINUTES: 25,
   OUTPUT_SPREADSHEET_NAME: 'PDF-kategorisering',
   OUTPUT_SHEET_NAME: 'Resultat',
@@ -64,13 +71,21 @@ const GRAMMATIK_KEYWORDS = [
   'genus', 'kasus', 'artikel',
 ];
 
-// Ord för religionskategorin: religionsnamn/-begrepp samt namn på gudar
-// och centrala religiösa gestalter.
+// Ord för religionskategorin: religionsnamn/-begrepp, namn på gudar och
+// centrala religiösa gestalter, samt institutioner/högtider/skrifter.
 const RELIGION_KEYWORDS = [
   'religion', 'kristendom', 'islam', 'judendom', 'hinduism', 'buddhism',
   'tro', 'troende', 'gud', 'gudar', 'gudinna', 'gudinnor',
   'allah', 'muhammed', 'jesus', 'kristus', 'jahve', 'jehova',
-  'buddha', 'shiva', 'vishnu', 'brahma', 'ganesha',
+  'buddha', 'shiva', 'vishnu', 'brahma', 'ganesha', 'moses', 'abraham',
+  'kyrka', 'kyrkan', 'moské', 'synagoga', 'tempel',
+  'bön', 'böner', 'helig', 'heliga', 'helgon',
+  'profet', 'profeten', 'apostel', 'apostlarna',
+  'jul', 'påsk', 'pingst', 'ramadan', 'sabbat', 'fastan', 'pilgrim',
+  'dop', 'nattvard', 'gudstjänst', 'präst', 'pastor', 'biskop', 'imam',
+  'rabbin', 'koranen', 'koran', 'bibeln', 'bibel', 'torah', 'tora',
+  'evangelium', 'ängel', 'änglar', 'satan', 'djävul', 'paradis',
+  'reinkarnation', 'karma', 'nirvana',
 ];
 
 // Vanliga engelska funktionsord, används för att gissa om en text
@@ -238,6 +253,10 @@ function classify_(file, text) {
     if (lowerName.includes('grammatik')) {
       grammatikScore += 3;
     }
+    if (looksLikeExercise_(text)) {
+      grammatikScore += CONFIG.EXERCISE_SCORE_BONUS;
+      grammatikMatched = grammatikMatched.concat(['[kort/övningsliknande text]']);
+    }
   }
 
   const religionMatched = RELIGION_KEYWORDS.filter((kw) => containsWord_(lowerText, kw));
@@ -292,6 +311,28 @@ function detectEnglish_(text) {
   }
   const englishHits = words.filter((w) => ENGLISH_STOPWORDS.includes(w)).length;
   return englishHits / words.length >= CONFIG.ENGLISH_MIN_RATIO;
+}
+
+// Gissar om texten är en grammatikövning snarare än en berättande text:
+// grammatikövningar är ofta korta (enstaka meningar), har luckor att
+// fylla i ("___") eller är numrerade uppgiftslistor ("1. ... 2. ...").
+// Detta är en svag signal (kort/numrerat/luckor förekommer i uppgifter
+// för andra ämnen också) och tänkt att komplettera nyckelordsträffar,
+// inte ersätta dem.
+function looksLikeExercise_(text) {
+  const wordCount = text.split(/[^a-zA-ZåäöÅÄÖ]+/).filter(Boolean).length;
+  if (wordCount > 0 && wordCount <= CONFIG.EXERCISE_MAX_WORDS) {
+    return true;
+  }
+  const blankCount = (text.match(/_{3,}/g) || []).length;
+  if (blankCount >= CONFIG.EXERCISE_MIN_BLANKS) {
+    return true;
+  }
+  const numberedItemCount = (text.match(/(^|\n)\s*\d{1,2}[.)]\s/g) || []).length;
+  if (numberedItemCount >= CONFIG.EXERCISE_MIN_NUMBERED_ITEMS) {
+    return true;
+  }
+  return false;
 }
 
 function getOrCreateResultSheet_() {
