@@ -97,6 +97,28 @@ Vill du köra om en enskild fil som fick kategorin **FEL** (t.ex. om OCR
 misslyckades): radera den raden i kalkylarket och kör funktionen igen —
 då tolkas den som "inte klar" och bearbetas på nytt.
 
+## Ombearbeta gamla resultat (Övrigt/FEL) med nuvarande regler
+
+`kategoriseraPdfer` hoppar alltid över filer som redan finns som rad i
+kalkylarket (dedup på Fil-ID) — även om koden har uppdaterats sedan filen
+klassades. Filer som OCR-tolkades innan Religion-kategorin eller senare
+nyckelords-/regeljusteringar fanns i koden kan alltså sitta kvar med ett
+föråldrat resultat.
+
+Funktionen `ombearbetaOvrigtOchFel` går igenom alla rader märkta
+**Övrigt** eller **FEL**, OCR-tolkar filen på nytt och klassificerar om
+den med den kod som finns i scriptet just nu — och **skriver över** den
+befintliga raden (lägger inte till en ny). En dold kolumn G
+("Ombearbetad") markerar vilka rader som redan setts över i den här
+omgången, så funktionen kan köras flera gånger i rad (eller via
+`skapaOmbearbetningTrigger`, samma mönster som `skapaTrigger`) utan att
+bearbeta samma rad om och om igen eller fastna i en loop på rader som
+fortfarande hamnar i Övrigt efter ombearbetning.
+
+Detta kör OCR på nytt för varje berörd rad, så har du många rader märkta
+Övrigt kan det ta lång tid — kör gärna `skapaOmbearbetningTrigger` och låt
+den jobba klart i bakgrunden.
+
 ## Flytta klassade filer till en mapp
 
 Kategoriseringen syns bara i kalkylarket, inte i Drive. Vill du samla alla

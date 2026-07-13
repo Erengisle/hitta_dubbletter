@@ -36,6 +36,15 @@
  * Den ställer in `kategoriseraPdfer` att köras automatiskt var 10:e minut,
  * och tar bort sig själv automatiskt när alla filer är klara.
  *
+ * Ombearbeta gamla resultat: filer som klassades innan Religion-kategorin
+ * eller senare regeljusteringar fanns i koden blir hängande med sitt gamla
+ * (ofta felaktiga) resultat, eftersom `kategoriseraPdfer` hoppar över
+ * filer som redan finns som rad i kalkylarket. Kör `ombearbetaOvrigtOchFel`
+ * (eller `skapaOmbearbetningTrigger` för automatisk upprepning) för att
+ * OCR-tolka om och klassificera om alla rader märkta "Övrigt" eller "FEL"
+ * med nuvarande kod, och skriva över raden istället för att lägga till en
+ * ny.
+ *
  * Krav: Aktivera avancerad tjänst "Drive API" (v2) under Tjänster i
  * Apps Script-editorn innan du kör. Se README.md för fullständiga
  * installationssteg.
@@ -139,6 +148,86 @@ function skapaTrigger() {
     .everyMinutes(10)
     .create();
   Logger.log('Trigger skapad. kategoriseraPdfer körs nu automatiskt var 10:e minut tills alla filer är klara, då tas triggern bort automatiskt.');
+}
+
+// Kör om OCR + klassificering (med nuvarande KEYWORDS/regler) för alla
+// rader i kalkylarket märkta "Övrigt" eller "FEL", och skriver över raden
+// med det nya resultatet. Tänkt att fånga upp filer som klassades innan
+// Religion-kategorin eller senare regeljusteringar fanns i koden — de
+// hoppas annars alltid över av kategoriseraPdfer eftersom de redan finns
+// som rad (dedup på Fil-ID).
+//
+// Kolumn 7 ("Ombearbetad") markerar vilka rader som redan setts över i en
+// ombearbetningsomgång, så funktionen kan köras flera gånger (eller via
+// skapaOmbearbetningTrigger) utan att fastna i en loop på rader som
+// fortfarande hamnar i Övrigt efter ombearbetning.
+function ombearbetaOvrigtOchFel() {
+  const startTime = Date.now();
+  const maxRuntimeMs = CONFIG.MAX_RUNTIME_MINUTES * 60 * 1000;
+
+  const sheet = getOrCreateResultSheet_();
+  ensureOmbearbetadKolumn_(sheet);
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    Logger.log('Inga resultat i kalkylarket ännu.');
+    return;
+  }
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 7).getValues(); // Fil-ID..Ombearbetad
+  const toProcess = [];
+  data.forEach((row, i) => {
+    const [fileId, fileName, kategori, , , , ombearbetad] = row;
+    if ((kategori === 'Övrigt' || kategori === 'FEL') && !ombearbetad) {
+      toProcess.push({ rowNumber: i + 2, fileId, fileName });
+    }
+  });
+
+  Logger.log(`${toProcess.length} rad(er) att ombearbeta (Övrigt/FEL utan Ombearbetad-markering).`);
+
+  let processed = 0;
+  for (const item of toProcess) {
+    if (Date.now() - startTime > maxRuntimeMs) {
+      Logger.log(`Tidsgräns nådd efter ${processed} rad(er) denna körning (${toProcess.length - processed} kvar). Kör ombearbetaOvrigtOchFel igen för att fortsätta.`);
+      return;
+    }
+    Logger.log(`(${processed + 1}/${toProcess.length}) OCR-tolkar om ${item.fileName}...`);
+    let result;
+    try {
+      const file = DriveApp.getFileById(item.fileId);
+      const text = ocrToText_(file);
+      result = classify_(file, text);
+    } catch (err) {
+      Logger.log(`FEL vid ombearbetning av ${item.fileName}: ${err}`);
+      result = { category: 'FEL', score: 0, matched: [] };
+    }
+    updateResultRow_(sheet, item.rowNumber, result);
+    processed++;
+  }
+
+  Logger.log(`Klart! ${processed} rad(er) ombearbetade denna körning. Se kalkylarket för resultat.`);
+  deleteTriggersForFunction_('ombearbetaOvrigtOchFel');
+}
+
+function skapaOmbearbetningTrigger() {
+  deleteTriggersForFunction_('ombearbetaOvrigtOchFel');
+  ScriptApp.newTrigger('ombearbetaOvrigtOchFel')
+    .timeBased()
+    .everyMinutes(10)
+    .create();
+  Logger.log('Trigger skapad. ombearbetaOvrigtOchFel körs nu automatiskt var 10:e minut tills alla Övrigt/FEL-rader är ombearbetade, då tas triggern bort automatiskt.');
+}
+
+function ensureOmbearbetadKolumn_(sheet) {
+  if (sheet.getRange(1, 7).getValue() !== 'Ombearbetad') {
+    sheet.getRange(1, 7).setValue('Ombearbetad');
+  }
+}
+
+function updateResultRow_(sheet, rowNumber, result) {
+  sheet.getRange(rowNumber, 3, 1, 3).setValues([[result.category, result.score, (result.matched || []).join(', ')]]);
+  sheet.getRange(rowNumber, 7).setValue(new Date());
+  SpreadsheetApp.flush();
 }
 
 function deleteTriggersForFunction_(functionName) {
@@ -340,7 +429,7 @@ function getOrCreateResultSheet_() {
   let sheet = ss.getSheetByName(CONFIG.OUTPUT_SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(CONFIG.OUTPUT_SHEET_NAME);
-    sheet.appendRow(['Fil-ID', 'Filnamn', 'Kategori', 'Poäng', 'Matchade nyckelord', 'Länk']);
+    sheet.appendRow(['Fil-ID', 'Filnamn', 'Kategori', 'Poäng', 'Matchade nyckelord', 'Länk', 'Ombearbetad']);
   }
   return sheet;
 }
