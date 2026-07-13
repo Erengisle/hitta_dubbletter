@@ -90,19 +90,20 @@ då tolkas den som "inte klar" och bearbetas på nytt.
 ## Flytta klassade filer till en mapp
 
 Kategoriseringen syns bara i kalkylarket, inte i Drive. Vill du samla alla
-filer märkta **Grammatik** i en egen mapp finns funktionen
-`flyttaGrammatikTillMapp`:
+filer märkta **Grammatik** respektive **Religion** i egna mappar finns
+funktionerna `flyttaGrammatikTillMapp` och `flyttaReligionTillMapp`:
 
-1. Sätt `CONFIG.GRAMMATIK_FOLDER_ID` till ID:t för målmappen (samma sätt
-   som `FOLDER_ID` — sista delen av mappens URL).
-2. Kör `flyttaGrammatikTillMapp`. Första gången är det en **torrkörning**:
-   inget flyttas, du får bara en lista i loggen (Visa → Loggar) över vilka
-   filer som skulle flyttas.
+1. Sätt `CONFIG.GRAMMATIK_FOLDER_ID` respektive `CONFIG.RELIGION_FOLDER_ID`
+   till ID:t för respektive målmapp (samma sätt som `FOLDER_ID` — sista
+   delen av mappens URL).
+2. Kör önskad funktion. Första gången är det en **torrkörning**: inget
+   flyttas, du får bara en lista i loggen (Visa → Loggar) över vilka filer
+   som skulle flyttas.
 3. Ser listan rimlig ut: sätt `CONFIG.FLYTTA_BEKRÄFTA = true` och kör
    funktionen igen — nu flyttas filerna på riktigt.
 
 Filerna *flyttas* (tas bort från ursprungsmappen, läggs i målmappen), de
-kopieras inte. "Övrigt"-filer rörs aldrig av den här funktionen.
+kopieras inte. "Övrigt"-filer rörs aldrig av dessa funktioner.
 
 ## Begränsningar
 

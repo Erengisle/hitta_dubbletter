@@ -49,6 +49,7 @@ const CONFIG = {
   OUTPUT_SPREADSHEET_NAME: 'PDF-kategorisering',
   OUTPUT_SHEET_NAME: 'Resultat',
   GRAMMATIK_FOLDER_ID: 'KLISTRA_IN_MÅLMAPP_ID_HÄR',
+  RELIGION_FOLDER_ID: 'KLISTRA_IN_MÅLMAPP_ID_HÄR',
   FLYTTA_BEKRÄFTA: false,
 };
 
@@ -133,6 +134,14 @@ function deleteTriggersForFunction_(functionName) {
 }
 
 function flyttaGrammatikTillMapp() {
+  flyttaKategoriTillMapp_('Grammatik', CONFIG.GRAMMATIK_FOLDER_ID);
+}
+
+function flyttaReligionTillMapp() {
+  flyttaKategoriTillMapp_('Religion', CONFIG.RELIGION_FOLDER_ID);
+}
+
+function flyttaKategoriTillMapp_(category, folderId) {
   const sheet = getOrCreateResultSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
@@ -141,22 +150,22 @@ function flyttaGrammatikTillMapp() {
   }
 
   const rows = sheet.getRange(2, 1, lastRow - 1, 3).getValues(); // Fil-ID, Filnamn, Kategori
-  const grammatikRows = rows.filter((r) => r[2] === 'Grammatik');
+  const matchingRows = rows.filter((r) => r[2] === category);
 
-  if (grammatikRows.length === 0) {
-    Logger.log('Inga filer kategoriserade som Grammatik hittades.');
+  if (matchingRows.length === 0) {
+    Logger.log(`Inga filer kategoriserade som ${category} hittades.`);
     return;
   }
 
   if (!CONFIG.FLYTTA_BEKRÄFTA) {
-    Logger.log(`TORRKÖRNING: ${grammatikRows.length} fil(er) SKULLE flyttas till målmappen. Inget har flyttats. Sätt CONFIG.FLYTTA_BEKRÄFTA = true och kör igen för att faktiskt flytta.`);
-    grammatikRows.forEach((r) => Logger.log(`  - ${r[1]}`));
+    Logger.log(`TORRKÖRNING: ${matchingRows.length} fil(er) SKULLE flyttas till målmappen för ${category}. Inget har flyttats. Sätt CONFIG.FLYTTA_BEKRÄFTA = true och kör igen för att faktiskt flytta.`);
+    matchingRows.forEach((r) => Logger.log(`  - ${r[1]}`));
     return;
   }
 
-  const destFolder = DriveApp.getFolderById(CONFIG.GRAMMATIK_FOLDER_ID);
+  const destFolder = DriveApp.getFolderById(folderId);
   let moved = 0;
-  grammatikRows.forEach((r) => {
+  matchingRows.forEach((r) => {
     const [fileId, fileName] = r;
     try {
       moveFileToFolder_(DriveApp.getFileById(fileId), destFolder);
@@ -165,7 +174,7 @@ function flyttaGrammatikTillMapp() {
       Logger.log(`FEL vid flytt av ${fileName}: ${err}`);
     }
   });
-  Logger.log(`Klart. ${moved} av ${grammatikRows.length} fil(er) flyttade till målmappen.`);
+  Logger.log(`Klart. ${moved} av ${matchingRows.length} fil(er) flyttade till målmappen för ${category}.`);
 }
 
 function moveFileToFolder_(file, destFolder) {
