@@ -11,8 +11,9 @@
  *    RELIGION_KEYWORDS (ordgränsmatchning, inte delsträng, så t.ex. "tro"
  *    inte råkar träffa inuti "kontroll"). Filnamnet ger extra poäng om det
  *    innehåller "grammatik"/"religion". Text som till stor del är på
- *    engelska ger extra poäng till Religion (se ENGLISH_STOPWORDS och
- *    CONFIG.ENGLISH_MIN_RATIO).
+ *    engelska (se ENGLISH_STOPWORDS och CONFIG.ENGLISH_MIN_RATIO) ger
+ *    extra poäng till Religion — och kan ALDRIG bli Grammatik, oavsett
+ *    ordträffar (grammatikundervisningen är på svenska).
  * 3. Religionspoäng >= CONFIG.MIN_SCORE_RELIGION och >= grammatikpoäng ger
  *    kategorin "Religion". Annars ger grammatikpoäng >= CONFIG.MIN_SCORE
  *    kategorin "Grammatik". Annars "Övrigt" — dit hamnar t.ex. historia,
@@ -224,11 +225,19 @@ function ocrToText_(file) {
 function classify_(file, text) {
   const lowerText = text.toLowerCase();
   const lowerName = file.getName().toLowerCase();
+  const isEnglish = detectEnglish_(lowerText);
 
-  const grammatikMatched = GRAMMATIK_KEYWORDS.filter((kw) => containsWord_(lowerText, kw));
-  let grammatikScore = grammatikMatched.length;
-  if (lowerName.includes('grammatik')) {
-    grammatikScore += 3;
+  // Engelsk text är per definition aldrig Grammatik (svensk grammatik-
+  // undervisning), oavsett om enstaka ord råkar sammanfalla med
+  // GRAMMATIK_KEYWORDS (t.ex. "verb", "preposition", "adverb", "genus").
+  let grammatikMatched = [];
+  let grammatikScore = 0;
+  if (!isEnglish) {
+    grammatikMatched = GRAMMATIK_KEYWORDS.filter((kw) => containsWord_(lowerText, kw));
+    grammatikScore = grammatikMatched.length;
+    if (lowerName.includes('grammatik')) {
+      grammatikScore += 3;
+    }
   }
 
   const religionMatched = RELIGION_KEYWORDS.filter((kw) => containsWord_(lowerText, kw));
@@ -236,7 +245,6 @@ function classify_(file, text) {
   if (lowerName.includes('religion')) {
     religionScore += 3;
   }
-  const isEnglish = detectEnglish_(lowerText);
   if (isEnglish) {
     religionScore += CONFIG.ENGLISH_SCORE_BONUS;
   }
@@ -247,11 +255,14 @@ function classify_(file, text) {
   if (religionScore >= CONFIG.MIN_SCORE_RELIGION && religionScore >= grammatikScore) {
     category = 'Religion';
     score = religionScore;
-    matched = isEnglish ? religionMatched.concat(['[engelsk text]']) : religionMatched;
+    matched = religionMatched;
   } else if (grammatikScore >= CONFIG.MIN_SCORE) {
     category = 'Grammatik';
     score = grammatikScore;
     matched = grammatikMatched;
+  }
+  if (isEnglish) {
+    matched = matched.concat(['[engelsk text]']);
   }
 
   return {

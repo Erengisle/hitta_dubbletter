@@ -19,7 +19,9 @@ kalkylark — inga filer flyttas eller ändras.
    "religion" ges 3 extra poäng till respektive kategori. Om texten
    bedöms vara till stor del på engelska (andel engelska funktionsord ≥
    `CONFIG.ENGLISH_MIN_RATIO`) ges `CONFIG.ENGLISH_SCORE_BONUS` extra
-   poäng till Religion.
+   poäng till Religion — och filen kan **aldrig** bli Grammatik, även om
+   enstaka ord råkar sammanfalla med grammatiklistan (t.ex. "verb",
+   "preposition", "adverb", "genus" stavas likadant på engelska).
 4. Religionspoäng ≥ `MIN_SCORE_RELIGION` (standard 2) och ≥
    grammatikpoäng → **Religion**. Annars grammatikpoäng ≥ `MIN_SCORE`
    (standard 2) → **Grammatik**. Annars **Övrigt** — dit hamnar t.ex.
